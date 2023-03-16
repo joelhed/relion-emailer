@@ -3,6 +3,7 @@
 
 This watches the node for any finished jobs and notices the server when that happens.
 """
+import configparser
 import datetime
 import json
 import logging
@@ -11,6 +12,13 @@ import socket
 import sys
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+
+
+config = configparser.ConfigParser()
+config.read([
+    "relion-emailer-watcher.conf",
+    "/etc/relion-emailer-watcher.conf",
+])
 
 
 class RelionJobExitedEventHandler(FileSystemEventHandler):
@@ -36,8 +44,12 @@ def create_message(src_path):
 
 def notify_server(message):
     """Send the passed message to the server."""
-    logging.info("sending message: %s", str(message))
-    with socket.create_connection(("localhost", 62457)) as s:
+    host_port = (
+        config["relion-emailer-watcher"]["server_host"],
+        config["relion-emailer-watcher"].getint("server_port")
+    )
+    logging.info("sending message to %s: %s", host_port, str(message))
+    with socket.create_connection(host_port) as s:
         s.sendall(message)
 
 
@@ -45,10 +57,15 @@ def main():
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
-    path = sys.argv[1] if len(sys.argv) > 1 else '.'
+    watch_dir = config["relion-emailer-watcher"]["watch_dir"]
     event_handler = RelionJobExitedEventHandler()
     observer = Observer()
-    observer.schedule(event_handler, path, recursive=True)
+    observer.schedule(
+        event_handler,
+        watch_dir,
+        recursive=True
+    )
+    logging.info("starting to watch %s", watch_dir)
     observer.start()
     try:
         while observer.isAlive():
