@@ -1,0 +1,8 @@
+*.swp
+
+*.dist-info/
+.*venv/
+*.pyz
+
+server/aiosmtplib/
+
