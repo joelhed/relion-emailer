@@ -27,9 +27,8 @@ class RelionJobExitedEventHandler(FileSystemEventHandler):
 def create_message(src_path):
     """Create a bytes message to the server from the path of a RELION_JOB_EXITED_* file."""
     json_str = json.dumps({
-        "status": os.path.basename(src_path)[len("RELION_JOB_EXIT_"):],
         "nodename": socket.gethostname(),
-        "path": os.path.dirname(src_path),
+        "path": src_path,
         "time": datetime.datetime.now().isoformat(),
     })
     return bytes(json_str, "utf-8")
