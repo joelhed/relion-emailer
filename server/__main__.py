@@ -10,9 +10,8 @@ import typing
 from itertools import groupby
 from operator import attrgetter
 
+import aiosmtplib
 
-EMAIL_INTERVAL_SECONDS = 15 # 60 * 15
-JOBS_FILENAME = "jobs.jsonl"
 
 config = configparser.ConfigParser()
 config.read([
@@ -52,7 +51,8 @@ async def handle_message(reader, writer):
     data = await reader.read()
     logging.info("received message: %s", data)
 
-    with open(JOBS_FILENAME, "a") as f:
+    jobs_path = config["relion-emailer-server"]["jobs_path"]
+    with open(jobs_path , "a") as f:
         f.write(str(data, "utf-8"))
         f.write("\n")
 
@@ -64,13 +64,14 @@ def parse_job(line):
 
 def pop_all_jobs():
     """Read all jobs from file and clear the file afterwards."""
+    jobs_path = config["relion-emailer-server"]["jobs_path"]
     try:
-        with open(JOBS_FILENAME) as f:
+        with open(jobs_path) as f:
             jobs = [parse_job(line) for line in f]
     except FileNotFoundError:
         return []
 
-    with open(JOBS_FILENAME, "w") as f:
+    with open(jobs_path, "w") as f:
         f.write("")
 
     return jobs
@@ -120,13 +121,22 @@ async def send_email():
         logging.info("no finished jobs, skipping sending...")
         return
 
-    logging.info("send email with jobs: \n%s", str(build_message(jobs)))
+    message = build_message(jobs)
+    logging.info("send email: \n%s", str(message))
+    await aiosmtplib.send(
+        message,
+        hostname=config["relion-emailer-server"]["smtp_host"],
+        username=config["relion-emailer-server"]["sender_email"],
+        password=config["relion-emailer-server"]["sender_password"],
+        use_tls=True
+    )
 
 
 async def email_at_interval():
-    logging.info("started email at an interval of %d seconds", EMAIL_INTERVAL_SECONDS)
+    interval_seconds = config["relion-emailer-server"].getint("email_interval_seconds")
+    logging.info("started email at an interval of %d seconds", interval_seconds)
     while True:
-        await asyncio.sleep(EMAIL_INTERVAL_SECONDS)
+        await asyncio.sleep(interval_seconds)
         logging.info("trying to send email")
         try:
             await send_email()
